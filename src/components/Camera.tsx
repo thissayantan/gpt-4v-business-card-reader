@@ -1,13 +1,16 @@
-"use client"
+"use client";
 
 import { useCallback, useRef, useState } from "react";
 import Webcam from "react-webcam";
 import axios from "axios";
+import Pica from "pica";
+
+const pica = Pica();
 
 const videoConstraints = {
   width: 1280,
   height: 720,
-  facingMode: "user",
+  facingMode: "user", // use "environment" for rear camera
 };
 
 export const Camera = () => {
@@ -15,15 +18,32 @@ export const Camera = () => {
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [imageText, setImageText] = useState<string | null>(null);
 
-  const capture = useCallback(() => {
-    const imageSrc = webcamRef.current?.getScreenshot() ?? null;
-    setImageSrc(imageSrc);
-  }, [webcamRef]);
+  const capture = useCallback(async () => {
+    const originalImageSrc = webcamRef.current?.getScreenshot() ?? null;
+    if (originalImageSrc) {
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 1280; // Set desired width
+        canvas.height = 720; // Set desired height
+        // Resize and optimize the image
+        await pica.resize(img, canvas, {
+          unsharpAmount: 80,
+          unsharpRadius: 0.6,
+          unsharpThreshold: 2,
+        });
+        const optimizedImage = canvas.toDataURL("image/jpeg", 0.9);
+        setImageSrc(optimizedImage);
+      };
+      img.src = originalImageSrc;
+    }
+  }, []);
 
   const uploadAndProcessImage = async () => {
     if (!imageSrc) return;
 
     try {
+      // Update this to your actual API endpoint
       const { data } = await axios.post("/api/upload", { image: imageSrc });
       setImageText(data.text);
     } catch (error) {
